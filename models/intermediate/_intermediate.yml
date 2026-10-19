@@ -5,8 +5,46 @@ models:
       - name: event_id
         description: "Event identifier. It must stay unique: if an event got several feedbacks, the join would multiply them (fan-out) and skew every downstream metric."
         data_tests: [unique, not_null]
+      - name: user_id
+        description: '{{ doc("col_user_id") }}'
+      - name: workspace_id
+        description: '{{ doc("col_workspace_id") }}'
+      - name: module_tag
+        description: '{{ doc("col_module_tag") }}'
+      - name: event_at
+        description: "When the question was asked (UTC)."
       - name: event_week
         description: "Monday of the event's week (ISO week, UTC)."
         data_tests: [not_null]
+      - name: response_latency_ms
+        description: '{{ doc("col_response_latency_ms") }}'
+      - name: latency_status
+        description: '{{ doc("col_latency_status") }}'
+      - name: has_invalid_latency
+        description: "True when the latency measurement is not valid."
+      - name: response_tokens
+        description: "Length of the answer, in tokens."
+      - name: retrieved_chunks
+        description: "Number of sources retrieved by the RAG and used for the answer."
+      - name: has_sources
+        description: "True when the answer cites at least one source. For legal answers, an unsourced answer is a quality risk."
+      - name: is_cached
+        description: "True when the answer came from the cache."
       - name: has_vote
         description: "True when the answer received a valid vote (+1 or -1)."
+      - name: thumbs
+        description: "The vote: 1 = thumbs up, -1 = thumbs down. Empty = no vote, or an invalid one."
+      - name: is_thumbs_down
+        description: "True for a thumbs down. Empty when there is no valid vote."
+      - name: reason_tag
+        description: '{{ doc("col_reason_tag") }}'
+      - name: is_unknown_workspace
+        description: "True when the workspace does not exist in the workspaces table (8 events): its attributes below are empty."
+      - name: country
+        description: '{{ doc("col_country") }}'
+      - name: plan
+        description: '{{ doc("col_plan") }}'
+      - name: firm_size_bucket
+        description: '{{ doc("col_firm_size_bucket") }}'
+      - name: is_before_user_creation
+        description: "True when the event happens before the user's creation date. Expected: user dates are truncated to midnight, so the event time is trusted."

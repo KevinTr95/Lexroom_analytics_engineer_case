@@ -1,7 +1,16 @@
 lexroom_analytics:
   target: dev
   outputs:
+    # Default target, for development: schemas are prefixed with "dev_" (dev_staging, dev_marts...)
     dev:
       type: duckdb
       path: lexroom.duckdb
+      schema: dev
+      threads: 4
+    # The tables people read: unprefixed schemas (staging, intermediate, marts).
+    # Run with: dbt build --target prod
+    prod:
+      type: duckdb
+      path: lexroom.duckdb
+      schema: main
       threads: 4

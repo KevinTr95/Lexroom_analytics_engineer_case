@@ -7,39 +7,88 @@ models:
             combination_of_columns: [module_tag, week_start]
     columns:
       - name: module_tag
-        description: "Legal module."
+        description: '{{ doc("col_module_tag") }}'
         data_tests:
           - not_null
           - accepted_values:
               arguments:
                 values: ['civile', 'penale', 'tributario', 'lavoro', 'amministrativo', 'societario']
       - name: week_start
-        description: "Monday of the week."
+        description: '{{ doc("col_week_start") }}'
         data_tests: [not_null]
+      - name: answers
+        description: '{{ doc("col_answers") }}'
+      - name: votes
+        description: '{{ doc("col_votes") }}'
+      - name: thumbs_up
+        description: '{{ doc("col_thumbs_up") }}'
+      - name: thumbs_down
+        description: '{{ doc("col_thumbs_down") }}'
+      - name: answers_with_sources
+        description: '{{ doc("col_answers_with_sources") }}'
+      - name: median_latency_ms
+        description: '{{ doc("col_median_latency_ms") }}'
+      - name: response_rate
+        description: '{{ doc("col_response_rate") }}'
+      - name: satisfaction_rate
+        description: '{{ doc("col_satisfaction_rate") }}'
+      - name: grounded_rate
+        description: '{{ doc("col_grounded_rate") }}'
+      - name: is_low_sample
+        description: '{{ doc("col_is_low_sample_week") }}'
+      - name: reason_wrong_answer
+        description: "Thumbs down with reason 'wrong_answer'."
+      - name: reason_incomplete
+        description: "Thumbs down with reason 'incomplete'."
+      - name: reason_hallucination
+        description: "Thumbs down with reason 'hallucination' (the answer invents facts or sources)."
+      - name: reason_slow
+        description: "Thumbs down with reason 'slow'."
+      - name: reason_other
+        description: "Thumbs down with reason 'other'."
+      - name: reason_not_given
+        description: "Thumbs down with no reason given."
       - name: quality_score
         description: '{{ doc("quality_score") }}'
-      - name: satisfaction_rate
-        description: "Thumbs up / valid votes. Only reflects people who vote."
-      - name: response_rate
-        description: "Valid votes / answers. If it shifts a lot, satisfaction becomes less comparable over time."
-      - name: is_low_sample
-        description: "True when the week has fewer than 50 votes: the rate is unstable and should be read with care."
 
   - name: fct_ama_quality_weekly
     description: '{{ doc("fct_ama_quality_weekly") }}'
     columns:
       - name: week_start
-        description: "Monday of the week."
+        description: '{{ doc("col_week_start") }}'
         data_tests: [unique, not_null]
       - name: north_star_quality
         description: '{{ doc("quality_score") }}'
+      - name: satisfaction_rate
+        description: '{{ doc("col_satisfaction_rate") }}'
+      - name: grounded_rate
+        description: '{{ doc("col_grounded_rate") }}'
+      - name: response_rate
+        description: '{{ doc("col_response_rate") }}'
+      - name: is_low_sample
+        description: '{{ doc("col_is_low_sample_week") }}'
+      - name: answers
+        description: '{{ doc("col_answers") }}'
+      - name: votes
+        description: '{{ doc("col_votes") }}'
+      - name: thumbs_up
+        description: '{{ doc("col_thumbs_up") }}'
+      - name: thumbs_down
+        description: '{{ doc("col_thumbs_down") }}'
+      - name: answers_with_sources
+        description: '{{ doc("col_answers_with_sources") }}'
+      - name: median_latency_ms
+        description: '{{ doc("col_median_latency_ms") }}'
       - name: active_workspaces
         description: "Workspaces that asked AMA at least one question in the week. A guardrail: the North Star measures quality, not usage."
+      - name: active_users
+        description: "Users who asked AMA at least one question in the week."
 
   - name: fct_workspace_health
     description: '{{ doc("fct_workspace_health") }}'
     columns:
       - name: workspace_id
+        description: '{{ doc("col_workspace_id") }}'
         data_tests:
           - unique
           - not_null
@@ -47,6 +96,12 @@ models:
               arguments:
                 to: ref('stg_lexroom__workspaces')
                 field: workspace_id
+      - name: country
+        description: '{{ doc("col_country") }}'
+      - name: plan
+        description: '{{ doc("col_plan") }}'
+      - name: firm_size_bucket
+        description: '{{ doc("col_firm_size_bucket") }}'
       - name: risk_score
         description: '{{ doc("risk_score") }}'
       - name: risk_band
@@ -57,15 +112,51 @@ models:
               arguments:
                 values: ['high', 'medium', 'low', 'low_volume', 'new', 'returning', 'dormant', 'never_active']
       - name: first_active_week
-        description: "Week of the workspace's first AMA answer in the data. NULL = never used AMA."
+        description: "Week of the workspace's first AMA answer in the data. Empty = never used AMA."
       - name: risk_signals
         description: "The signals that fired, in plain words: the explanation of the score."
-      - name: thumbs_down_change_pts
-        description: "Change in the smoothed thumbs-down share, in percentage points (12 = from 20% to 32%)."
+      - name: answers_prev_4w
+        description: "AMA answers in the earlier 4 weeks of the 8-week window."
+      - name: answers_recent_4w
+        description: "AMA answers in the last 4 weeks."
+      - name: votes_prev_4w
+        description: "Valid votes in the earlier 4 weeks."
+      - name: votes_recent_4w
+        description: "Valid votes in the last 4 weeks."
+      - name: is_low_sample
+        description: "True when the workspace has fewer than 20 votes over the 8 weeks (min_votes_per_workspace): the quality signal is unreliable."
+      - name: usage_change
+        description: "Change in answers, last 4 weeks vs the 4 before, as a share: -0.66 = 66% fewer answers."
+      - name: platform_usage_change
+        description: "The same change for the whole platform (same value on every row). Context only."
       - name: usage_change_vs_platform_pts
         description: "Workspace usage change minus the platform's, in percentage points. Context only, not part of the score: negative = worse than average."
-      - name: is_low_sample
-        description: "True when the workspace has fewer than 20 votes over the 8 weeks: the quality signal is unreliable."
+      - name: active_users_change
+        description: "Change in active users, last 4 weeks vs the 4 before, as a share: -0.40 = 40% fewer people."
+      - name: thumbs_down_rate_prev
+        description: "Smoothed thumbs-down share in the earlier 4 weeks, from 0 to 1 (see risk_score for the smoothing)."
+      - name: thumbs_down_rate_recent
+        description: "Smoothed thumbs-down share in the last 4 weeks, from 0 to 1."
+      - name: thumbs_down_change_pts
+        description: "Change in the smoothed thumbs-down share, in percentage points (12 = from 20% to 32%)."
+      - name: median_latency_prev_ms
+        description: "Median time to answer in the earlier 4 weeks, in milliseconds."
+      - name: median_latency_recent_ms
+        description: "Median time to answer in the last 4 weeks, in milliseconds."
+      - name: latency_change
+        description: "Change in median latency as a share: 0.30 = 30% slower."
+      - name: no_source_share_recent
+        description: "Share of the last 4 weeks' answers that cite no source, from 0 to 1."
+      - name: sig_usage_drop
+        description: "Signal: answers down by more than 50% (35 points)."
+      - name: sig_quality_drop
+        description: "Signal: smoothed thumbs-down share up by more than 10 points (25 points)."
+      - name: sig_slower
+        description: "Signal: median latency up by more than 30% (15 points)."
+      - name: sig_fewer_users
+        description: "Signal: active users down by more than 30% (15 points)."
+      - name: sig_no_sources
+        description: "Signal: more than 10% of recent answers without sources (10 points)."
 
   - name: fct_engineering_team_weekly
     description: '{{ doc("fct_engineering_team_weekly") }}'
@@ -75,11 +166,20 @@ models:
             combination_of_columns: [team, week_start]
     columns:
       - name: team
+        description: "Engineering team."
         data_tests: [not_null]
       - name: week_start
-        description: "Monday of the week."
+        description: '{{ doc("col_week_start") }}'
         data_tests: [not_null]
+      - name: prs_merged
+        description: "Pull requests merged in the week."
       - name: median_merge_lead_time_hours
-        description: "Median hours between opening and merging, for PRs merged in the week."
+        description: "Median hours between opening and merging, for the PRs merged in the week."
+      - name: p90_merge_lead_time_hours
+        description: "Hours within which 90% of the week's merged PRs were merged. Unstable on weeks with few PRs: one slow PR can drive it."
+      - name: median_pr_size_lines
+        description: "Median size of the merged PRs, in lines added + deleted."
       - name: prs_open_at_week_end
         description: "PRs open and not yet merged at the end of the week."
+      - name: median_open_pr_age_hours
+        description: "Median age, in hours, of the PRs still open at the end of the week."

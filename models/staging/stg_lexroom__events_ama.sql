@@ -1,16 +1,31 @@
 -- Grain: one row per AMA event (event_id).
--- Cleaning: exact duplicates removed, module_tag standardised,
+-- Cleaning: types set, exact duplicates removed, module_tag standardised,
 -- invalid latencies set to NULL and flagged (the event itself is kept).
 
 with source as (
-    select * from {{ ref('raw_events_ama') }}
+    select * from {{ source('lexroom', 'raw_events_ama') }}
+),
+
+typed as (
+    -- The raw files arrive as text: types are set here, once
+    select
+        event_id,
+        user_id,
+        workspace_id,
+        module_tag,
+        cast(response_latency_ms as bigint)                     as response_latency_ms,
+        cast(response_tokens as bigint)                         as response_tokens,
+        cast(retrieved_chunks as bigint)                        as retrieved_chunks,
+        cast(is_cached as boolean)                              as is_cached,
+        cast(created_at as timestamptz)                         as created_at
+    from source
 ),
 
 deduplicated as (
     -- 5 event_ids appear twice with identical rows (likely a duplicate delivery):
     -- keep one. With identical rows, which one we keep makes no difference.
     select *
-    from source
+    from typed
     qualify row_number() over (partition by event_id order by created_at) = 1
 ),
 
@@ -51,9 +66,13 @@ cleaned as (
         is_cached,
         created_at at time zone 'UTC'                           as event_at
     from deduplicated
+),
+
+final as (
+    select
+        *,
+        latency_status <> 'valid'                               as has_invalid_latency
+    from cleaned
 )
 
-select
-    *,
-    latency_status <> 'valid'                                   as has_invalid_latency
-from cleaned
+select * from final

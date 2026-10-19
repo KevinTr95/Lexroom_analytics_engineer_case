@@ -11,9 +11,10 @@ that answer three business questions:
 | Q3, Leadership: one number for AMA quality | `fct_ama_quality_weekly` |
 | Bonus, Engineering: how fast do code changes get merged? | `fct_engineering_team_weekly` |
 
-Data flows through three layers: **staging** (cleaning each source table), **intermediate**
-(one event enriched with its vote and customer) and **marts** (the tables above).
-Every table states in its description what one row represents.
+Data flows from the **sources** (the raw tables) through three layers: **staging** (typing
+and cleaning each source table), **intermediate** (one event enriched with its vote and
+customer) and **marts** (the tables above). Every table states in its description what one
+row represents, and every column is described.
 
 Weeks start on Monday (UTC). The "last 8 weeks" run from 23 February to 13 April 2026:
 they end with the last week in the data, not with today's date.

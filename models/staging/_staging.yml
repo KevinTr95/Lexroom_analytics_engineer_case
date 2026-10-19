@@ -3,8 +3,10 @@ models:
     description: "One row per AMA event (a question to the assistant and its answer). Duplicates removed, module_tag standardised, invalid latencies set to NULL."
     columns:
       - name: event_id
+        description: '{{ doc("col_event_id") }}'
         data_tests: [unique, not_null]
       - name: user_id
+        description: '{{ doc("col_user_id") }}'
         data_tests:
           - not_null
           - relationships:
@@ -12,6 +14,7 @@ models:
                 to: ref('stg_lexroom__users')
                 field: user_id
       - name: workspace_id
+        description: '{{ doc("col_workspace_id") }}'
         data_tests:
           - not_null
           - relationships:            # 8 events on non-existent workspaces (ws_9000, ws_9001): known
@@ -21,25 +24,39 @@ models:
               config:
                 severity: warn
       - name: module_tag
+        description: '{{ doc("col_module_tag") }}'
         data_tests:
           - not_null
           - accepted_values:          # a new value would create a phantom module in Q1: blocking
               arguments:
                 values: ['civile', 'penale', 'tributario', 'lavoro', 'amministrativo', 'societario']
       - name: latency_status
+        description: '{{ doc("col_latency_status") }}'
         data_tests:
           - accepted_values:
               arguments:
                 values: ['valid', 'negative', 'sentinel', 'implausible_cache']
       - name: response_latency_ms
-        description: "Valid latency in ms; NULL when the measurement is invalid (see latency_status)."
+        description: '{{ doc("col_response_latency_ms") }}'
+      - name: response_tokens
+        description: "Length of the answer, in tokens."
+      - name: retrieved_chunks
+        description: "Number of sources retrieved by the RAG and used for the answer."
+      - name: is_cached
+        description: "True when the answer came from the cache."
+      - name: event_at
+        description: "When the question was asked (UTC)."
+      - name: has_invalid_latency
+        description: "True when the latency measurement is not valid (latency_status other than 'valid')."
 
   - name: stg_lexroom__feedback_ama
     description: "One row per feedback (thumbs up/down) on an AMA answer. Duplicates removed; free_text dropped for privacy."
     columns:
       - name: feedback_id
+        description: "Identifier of the feedback."
         data_tests: [unique, not_null]
       - name: event_id
+        description: "The answer being rated. 50 feedbacks point to answers that do not exist."
         data_tests:
           - not_null
           - relationships:            # 50 feedbacks point to non-existent events (_orphan suffix): known
@@ -49,6 +66,7 @@ models:
               config:
                 severity: warn
       - name: user_id
+        description: '{{ doc("col_user_id") }}'
         data_tests:
           - not_null
           - relationships:
@@ -56,6 +74,7 @@ models:
                 to: ref('stg_lexroom__users')
                 field: user_id
       - name: thumbs
+        description: "The vote as recorded: 1 = thumbs up, -1 = thumbs down. 16 rows hold -2, 0 or 2."
         data_tests:
           - accepted_values:          # 16 off-schema values (-2, 0, 2): known and excluded from metrics
               arguments:
@@ -63,18 +82,29 @@ models:
                 quote: false
               config:
                 severity: warn
+      - name: is_valid_thumbs
+        description: "True for +1 or -1. Only valid votes are used in the metrics."
+      - name: is_thumbs_down
+        description: "True for a thumbs down (-1)."
       - name: reason_tag
+        description: '{{ doc("col_reason_tag") }}'
         data_tests:
           - accepted_values:
               arguments:
                 values: ['wrong_answer', 'incomplete', 'hallucination', 'slow', 'other']
+      - name: has_free_text
+        description: "True when the user wrote a comment. The comment itself is not kept (privacy)."
+      - name: feedback_at
+        description: "When the feedback was given (UTC)."
 
   - name: stg_lexroom__users
     description: "One row per user."
     columns:
       - name: user_id
+        description: '{{ doc("col_user_id") }}'
         data_tests: [unique, not_null]
       - name: workspace_id
+        description: '{{ doc("col_workspace_id") }}'
         data_tests:
           - not_null
           - relationships:            # 3 users (u_orphan_*) on non-existent workspaces: known
@@ -84,34 +114,62 @@ models:
               config:
                 severity: warn
       - name: role
+        description: "partner, associate, paralegal or in_house_counsel."
         data_tests:
           - accepted_values:
               arguments:
                 values: ['partner', 'associate', 'paralegal', 'in_house_counsel']
+      - name: created_at
+        description: "When the account was created (UTC). Always at midnight: the time of day is truncated, so it is less reliable than event timestamps."
+      - name: is_deleted
+        description: "True when the account has been deleted."
 
   - name: stg_lexroom__workspaces
     description: "One row per workspace (a law firm or an in-house legal team)."
     columns:
       - name: workspace_id
+        description: '{{ doc("col_workspace_id") }}'
         data_tests: [unique, not_null]
       - name: country
+        description: '{{ doc("col_country") }}'
         data_tests:
           - accepted_values:
               arguments:
                 values: ['IT', 'DE', 'ES', 'unknown']
       - name: plan
+        description: '{{ doc("col_plan") }}'
         data_tests:
           - accepted_values:
               arguments:
                 values: ['free', 'pro', 'enterprise']
       - name: firm_size_bucket
+        description: '{{ doc("col_firm_size_bucket") }}'
         data_tests:
           - accepted_values:
               arguments:
                 values: ['1-5', '6-20', '21-100', '100+']
+      - name: signup_date
+        description: "Date the workspace signed up."
 
   - name: stg_lexroom__engineering_prs
     description: "One row per pull request from the engineering team (bonus)."
     columns:
       - name: pr_id
+        description: "Identifier of the pull request."
         data_tests: [unique, not_null]
+      - name: author_id
+        description: "Engineer who opened the pull request."
+      - name: team
+        description: "Engineering team of the author."
+      - name: created_at
+        description: "When the pull request was opened (UTC)."
+      - name: merged_at
+        description: "When it was merged (UTC). Empty = not merged (yet)."
+      - name: is_merged
+        description: "True when the pull request has been merged."
+      - name: lines_added
+        description: "Lines of code added."
+      - name: lines_deleted
+        description: "Lines of code deleted."
+      - name: review_comments_count
+        description: "Number of review comments."

@@ -48,36 +48,37 @@ weekly as (
 
 final as (
     select
-        mw.module_tag,
-        mw.week_start,
-        coalesce(w.answers, 0)                                          as answers,
-        coalesce(w.votes, 0)                                            as votes,
-        coalesce(w.thumbs_up, 0)                                        as thumbs_up,
-        coalesce(w.thumbs_down, 0)                                      as thumbs_down,
-        coalesce(w.answers_with_sources, 0)                             as answers_with_sources,
-        w.median_latency_ms,
+        module_weeks.module_tag,
+        module_weeks.week_start,
+        coalesce(weekly.answers, 0)                                     as answers,
+        coalesce(weekly.votes, 0)                                       as votes,
+        coalesce(weekly.thumbs_up, 0)                                   as thumbs_up,
+        coalesce(weekly.thumbs_down, 0)                                 as thumbs_down,
+        coalesce(weekly.answers_with_sources, 0)                        as answers_with_sources,
+        weekly.median_latency_ms,
 
         -- Quality components (NULL when the denominator is zero)
-        w.votes       / nullif(w.answers, 0)                            as response_rate,
-        w.thumbs_up   / nullif(w.votes, 0)                              as satisfaction_rate,
-        w.answers_with_sources / nullif(w.answers, 0)                   as grounded_rate,
+        weekly.votes / nullif(weekly.answers, 0)                        as response_rate,
+        weekly.thumbs_up / nullif(weekly.votes, 0)                      as satisfaction_rate,
+        weekly.answers_with_sources / nullif(weekly.answers, 0)         as grounded_rate,
 
-        coalesce(w.votes, 0) < {{ var('min_votes_per_week') }}          as is_low_sample,
+        coalesce(weekly.votes, 0) < {{ var('min_votes_per_week') }}     as is_low_sample,
 
-        coalesce(w.reason_wrong_answer, 0)                              as reason_wrong_answer,
-        coalesce(w.reason_incomplete, 0)                                as reason_incomplete,
-        coalesce(w.reason_hallucination, 0)                             as reason_hallucination,
-        coalesce(w.reason_slow, 0)                                      as reason_slow,
-        coalesce(w.reason_other, 0)                                     as reason_other,
-        coalesce(w.reason_not_given, 0)                                 as reason_not_given
-    from module_weeks as mw
-    left join weekly as w
-        on  w.module_tag = mw.module_tag
-        and w.week_start = mw.week_start
+        coalesce(weekly.reason_wrong_answer, 0)                         as reason_wrong_answer,
+        coalesce(weekly.reason_incomplete, 0)                           as reason_incomplete,
+        coalesce(weekly.reason_hallucination, 0)                        as reason_hallucination,
+        coalesce(weekly.reason_slow, 0)                                 as reason_slow,
+        coalesce(weekly.reason_other, 0)                                as reason_other,
+        coalesce(weekly.reason_not_given, 0)                            as reason_not_given,
+
+        -- Quality score: estimated share of answers that are grounded and liked
+        -- (satisfaction_rate x grounded_rate, the same formula as the North Star)
+        weekly.thumbs_up / nullif(weekly.votes, 0)
+            * (weekly.answers_with_sources / nullif(weekly.answers, 0)) as quality_score
+    from module_weeks
+    left join weekly
+        on  weekly.module_tag = module_weeks.module_tag
+        and weekly.week_start = module_weeks.week_start
 )
 
-select
-    *,
-    -- Quality score: estimated share of answers that are grounded and liked
-    satisfaction_rate * grounded_rate                                   as quality_score
-from final
+select * from final

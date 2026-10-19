@@ -72,7 +72,7 @@ per_window as (
 
 pivoted as (
     select
-        w.workspace_id,
+        workspaces.workspace_id,
         sum(answers)            filter (where time_window = 'previous')   as answers_prev,
         sum(answers)            filter (where time_window = 'recent')     as answers_recent,
         sum(active_users)       filter (where time_window = 'previous')   as users_prev,
@@ -84,16 +84,16 @@ pivoted as (
         sum(answers_without_sources) filter (where time_window = 'recent') as no_source_recent,
         max(median_latency_ms)  filter (where time_window = 'previous')   as latency_prev,
         max(median_latency_ms)  filter (where time_window = 'recent')     as latency_recent
-    from workspaces as w
-    left join per_window as p using (workspace_id)
+    from workspaces
+    left join per_window using (workspace_id)
     group by 1
 ),
 
 measures as (
     select
-        p.*,
-        coalesce(answers_prev, 0)   as a_prev,
-        coalesce(answers_recent, 0) as a_recent,
+        pivoted.*,
+        cast(coalesce(answers_prev, 0) as bigint)                               as answers_prev_4w,
+        cast(coalesce(answers_recent, 0) as bigint)                             as answers_recent_4w,
 
         -- Usage change: last 4 weeks / previous 4 weeks - 1
         coalesce(answers_recent, 0) / nullif(answers_prev, 0) - 1               as usage_change,
@@ -101,16 +101,16 @@ measures as (
         latency_recent / nullif(latency_prev, 0) - 1                            as latency_change,
 
         -- Smoothed thumbs-down rate: (thumbs down + k * global rate) / (votes + k)
-        (coalesce(thumbs_down_prev, 0)   + {{ var('smoothing_k') }} * g.thumbs_down_rate)
+        (coalesce(thumbs_down_prev, 0)   + {{ var('smoothing_k') }} * global_rate.thumbs_down_rate)
             / (coalesce(votes_prev, 0)   + {{ var('smoothing_k') }})            as thumbs_down_rate_prev,
-        (coalesce(thumbs_down_recent, 0) + {{ var('smoothing_k') }} * g.thumbs_down_rate)
+        (coalesce(thumbs_down_recent, 0) + {{ var('smoothing_k') }} * global_rate.thumbs_down_rate)
             / (coalesce(votes_recent, 0) + {{ var('smoothing_k') }})            as thumbs_down_rate_recent,
 
         no_source_recent / nullif(answers_recent, 0)                            as no_source_share_recent,
 
         coalesce(answers_prev, 0) >= {{ var('min_answers_for_risk') }}          as is_scored
-    from pivoted as p
-    cross join global_rate as g
+    from pivoted
+    cross join global_rate
 ),
 
 signals as (
@@ -140,63 +140,67 @@ scored as (
             + case when sig_no_sources   then 10 else 0 end
         end                                                                     as risk_score   -- NULL = not scored
     from signals
+),
+
+final as (
+    select
+        scored.workspace_id,
+        workspaces.country,
+        workspaces.plan,
+        workspaces.firm_size_bucket,
+
+        scored.risk_score,
+        case
+            -- Not scored: the status says why
+            when history.first_active_week is null                        then 'never_active'  -- no AMA activity at all
+            when scored.answers_prev_4w = 0 and scored.answers_recent_4w = 0 then 'dormant'    -- active before the 8 weeks, silent since: likely lost
+            when scored.answers_prev_4w = 0
+             and history.first_active_week >= {{ end_week }} - interval 21 day then 'new'      -- first activity in the last 4 weeks
+            when scored.answers_prev_4w = 0                               then 'returning'     -- back after a pause: nothing to compare against
+            when not scored.is_scored                                     then 'low_volume'    -- too few answers for a reliable trend
+            -- Scored
+            when scored.risk_score >= 50                                  then 'high'
+            when scored.risk_score >= 25                                  then 'medium'
+            else 'low'
+        end                                                                     as risk_band,
+        history.first_active_week,
+        concat_ws(', ',
+            case when scored.sig_usage_drop   then 'usage ' || cast(round(scored.usage_change * 100) as integer) || '%' end,
+            case when scored.sig_quality_drop then 'thumbs down +' || cast(round(scored.thumbs_down_change_pts) as integer) || ' pts' end,
+            case when scored.sig_slower       then 'latency +' || cast(round(scored.latency_change * 100) as integer) || '%' end,
+            case when scored.sig_fewer_users  then 'active users ' || cast(round(scored.active_users_change * 100) as integer) || '%' end,
+            case when scored.sig_no_sources   then cast(round(scored.no_source_share_recent * 100) as integer) || '% answers without sources' end
+        )                                                                       as risk_signals,
+
+        -- Volumes, to judge how much to trust the score
+        scored.answers_prev_4w,
+        scored.answers_recent_4w,
+        cast(coalesce(scored.votes_prev, 0) as bigint)                          as votes_prev_4w,
+        cast(coalesce(scored.votes_recent, 0) as bigint)                        as votes_recent_4w,
+        coalesce(scored.votes_prev, 0) + coalesce(scored.votes_recent, 0)
+            < {{ var('min_votes_per_workspace') }}                              as is_low_sample,
+
+        -- Underlying measures
+        scored.usage_change,
+        platform.platform_usage_change,
+        (scored.usage_change - platform.platform_usage_change) * 100            as usage_change_vs_platform_pts,
+        scored.active_users_change,
+        scored.thumbs_down_rate_prev,
+        scored.thumbs_down_rate_recent,
+        scored.thumbs_down_change_pts,
+        scored.latency_prev                                                     as median_latency_prev_ms,
+        scored.latency_recent                                                   as median_latency_recent_ms,
+        scored.latency_change,
+        scored.no_source_share_recent,
+        scored.sig_usage_drop,
+        scored.sig_quality_drop,
+        scored.sig_slower,
+        scored.sig_fewer_users,
+        scored.sig_no_sources
+    from scored
+    inner join workspaces using (workspace_id)
+    left join history using (workspace_id)
+    cross join platform
 )
 
-select
-    s.workspace_id,
-    w.country,
-    w.plan,
-    w.firm_size_bucket,
-
-    s.risk_score,
-    case
-        -- Not scored: the status says why
-        when h.first_active_week is null     then 'never_active'  -- no AMA activity at all
-        when s.a_prev = 0 and s.a_recent = 0 then 'dormant'       -- active before the 8 weeks, silent since: likely lost
-        when s.a_prev = 0
-         and h.first_active_week >= {{ end_week }} - interval 21 day
-                                             then 'new'           -- first activity in the last 4 weeks
-        when s.a_prev = 0                    then 'returning'     -- back after a pause: nothing to compare against
-        when not s.is_scored                 then 'low_volume'    -- too few answers for a reliable trend
-        -- Scored
-        when s.risk_score >= 50              then 'high'
-        when s.risk_score >= 25              then 'medium'
-        else 'low'
-    end                                                                         as risk_band,
-    h.first_active_week,
-    concat_ws(', ',
-        case when s.sig_usage_drop   then 'usage ' || cast(round(s.usage_change * 100) as integer) || '%' end,
-        case when s.sig_quality_drop then 'thumbs down +' || cast(round(s.thumbs_down_change_pts) as integer) || ' pts' end,
-        case when s.sig_slower       then 'latency +' || cast(round(s.latency_change * 100) as integer) || '%' end,
-        case when s.sig_fewer_users  then 'active users ' || cast(round(s.active_users_change * 100) as integer) || '%' end,
-        case when s.sig_no_sources   then cast(round(s.no_source_share_recent * 100) as integer) || '% answers without sources' end
-    )                                                                           as risk_signals,
-
-    -- Volumes, to judge how much to trust the score
-    s.a_prev                                                                    as answers_prev_4w,
-    s.a_recent                                                                  as answers_recent_4w,
-    coalesce(s.votes_prev, 0)                                                   as votes_prev_4w,
-    coalesce(s.votes_recent, 0)                                                 as votes_recent_4w,
-    coalesce(s.votes_prev, 0) + coalesce(s.votes_recent, 0) < 20                as is_low_sample,
-
-    -- Underlying measures
-    s.usage_change,
-    pl.platform_usage_change,
-    (s.usage_change - pl.platform_usage_change) * 100                           as usage_change_vs_platform_pts,
-    s.active_users_change,
-    s.thumbs_down_rate_prev,
-    s.thumbs_down_rate_recent,
-    s.thumbs_down_change_pts,
-    s.latency_prev                                                              as median_latency_prev_ms,
-    s.latency_recent                                                            as median_latency_recent_ms,
-    s.latency_change,
-    s.no_source_share_recent,
-    s.sig_usage_drop,
-    s.sig_quality_drop,
-    s.sig_slower,
-    s.sig_fewer_users,
-    s.sig_no_sources
-from scored as s
-inner join workspaces as w using (workspace_id)
-left join history as h using (workspace_id)
-cross join platform as pl
+select * from final

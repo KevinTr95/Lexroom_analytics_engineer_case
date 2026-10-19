@@ -1,0 +1,14 @@
+macros:
+  - name: generate_schema_name
+    description: >
+      Environment-aware schema names. On the prod target a model goes to its configured
+      schema as is (staging, intermediate, marts); on any other target the schema is prefixed
+      with the target schema (dev_staging, dev_intermediate, dev_marts), so development runs
+      never overwrite the tables people read.
+    arguments:
+      - name: custom_schema_name
+        type: string
+        description: "The schema set in dbt_project.yml (+schema), or none."
+      - name: node
+        type: object
+        description: "The node being built (unused, part of dbt's signature)."

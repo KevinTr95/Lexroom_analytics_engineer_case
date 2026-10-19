@@ -1,0 +1,105 @@
+sources:
+  - name: lexroom
+    description: >
+      Raw Lexroom tables, as delivered for the case (5 CSV files in data/). Locally, dbt-duckdb
+      reads them directly with read_csv, every column as text: types are set in staging, the
+      first layer that owns the data. In production these would be the BigQuery tables fed by
+      Pub/Sub, with a freshness check, e.g. warn after 6 hours without new events.
+    config:
+      meta:
+        # dbt-duckdb external source: {name} is the table name below. The path is relative
+        # to the directory dbt runs from (the repository root).
+        external_location: "read_csv('data/{name}.csv', header = true, all_varchar = true)"
+    tables:
+      - name: raw_events_ama
+        description: "One row per question asked to AMA (Ask Me Anything, the RAG-based legal Q&A module) and its answer. Contains a few exact duplicates."
+        columns:
+          - name: event_id
+            description: "Event identifier."
+            data_tests: [not_null]
+          - name: user_id
+            description: "User who asked the question."
+          - name: workspace_id
+            description: "Workspace (law firm or in-house team) of the user."
+          - name: module_tag
+            description: "Legal module: civile, penale, tributario, lavoro, amministrativo, societario. Casing varies, and 'civil' appears for 'civile'."
+          - name: response_latency_ms
+            description: "Time to answer, in milliseconds. Contains negative values and placeholder values (900,000; 45,000 on cached answers)."
+          - name: response_tokens
+            description: "Length of the answer, in tokens."
+          - name: retrieved_chunks
+            description: "Number of sources retrieved by the RAG and used for the answer."
+          - name: is_cached
+            description: "True when the answer came from the cache."
+          - name: created_at
+            description: "When the question was asked (UTC)."
+
+      - name: raw_feedback_ama
+        description: "One row per thumbs up / down given to an AMA answer, with an optional reason and comment. Contains a few exact duplicates."
+        columns:
+          - name: feedback_id
+            description: "Feedback identifier."
+            data_tests: [not_null]
+          - name: event_id
+            description: "The answer being rated. Not always present in raw_events_ama."
+          - name: user_id
+            description: "User who gave the feedback."
+          - name: thumbs
+            description: "1 = thumbs up, -1 = thumbs down. A few rows hold -2, 0 or 2."
+          - name: reason_tag
+            description: "Optional reason: wrong_answer, incomplete, hallucination, slow, other. Empty = no reason given."
+          - name: free_text
+            description: "Optional comment written by the user. May contain personal or confidential data: not used beyond staging."
+          - name: created_at
+            description: "When the feedback was given (UTC)."
+
+      - name: raw_users
+        description: "One row per user account."
+        columns:
+          - name: user_id
+            description: "User identifier."
+            data_tests: [not_null]
+          - name: workspace_id
+            description: "Workspace the user belongs to."
+          - name: role
+            description: "partner, associate, paralegal or in_house_counsel."
+          - name: created_at
+            description: "When the account was created. Always at midnight: the time of day is truncated."
+          - name: is_deleted
+            description: "True when the account has been deleted."
+
+      - name: raw_workspaces
+        description: "One row per workspace: a law firm or an in-house legal team, the customer account."
+        columns:
+          - name: workspace_id
+            description: "Workspace identifier."
+            data_tests: [not_null]
+          - name: country
+            description: "IT, DE or ES. Missing for a few workspaces."
+          - name: plan
+            description: "free, pro or enterprise."
+          - name: firm_size_bucket
+            description: "Size of the firm: 1-5, 6-20, 21-100, 100+."
+          - name: signup_date
+            description: "Date the workspace signed up."
+
+      - name: raw_engineering_prs
+        description: "One row per pull request in the engineering repositories (optional bonus question)."
+        columns:
+          - name: pr_id
+            description: "Pull request identifier."
+            data_tests: [not_null]
+          - name: author_id
+            description: "Engineer who opened the pull request."
+          - name: team
+            description: "Engineering team of the author."
+          - name: created_at
+            description: "When the pull request was opened (UTC)."
+          - name: merged_at
+            description: "When it was merged (UTC). Empty = not merged."
+          - name: lines_added
+            description: "Lines of code added."
+          - name: lines_deleted
+            description: "Lines of code deleted."
+          - name: review_comments_count
+            description: "Number of review comments."

@@ -1,0 +1,11 @@
+analyses:
+  - name: q1_module_quality_trend
+    description: "Q1, Product: weekly quality per legal module over the last 8 weeks, one row per module and week (the series to chart)."
+  - name: q1_module_focus
+    description: "Q1, Product: where to focus. For each module, quality in the last 4 weeks against the 4 before, and how many answers fall short in absolute terms."
+  - name: q2_workspaces_at_risk
+    description: "Q2, Customer Success: workspaces at high or medium risk, with the signals that fired, followed by dormant workspaces (likely already lost)."
+  - name: q3_north_star_trend
+    description: "Q3, Leadership: the AMA North Star over the last 8 weeks, with its components, votes and active workspaces to read it."
+  - name: bonus_engineering_lead_time
+    description: "Bonus, Engineering: typical merge lead time per team over the last 8 weeks, with the PRs left open."

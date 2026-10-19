@@ -5,7 +5,6 @@ profile: 'lexroom_analytics'
 model-paths: ["models"]
 analysis-paths: ["analyses"]
 test-paths: ["tests"]
-seed-paths: ["seeds"]
 macro-paths: ["macros"]
 
 clean-targets:
@@ -21,58 +20,12 @@ vars:
   prs_start_week: '2026-01-26'
   # Smoothing strength: number of "virtual" votes at the global rate (see README).
   smoothing_k: 10
-  # Below this many weekly votes a rate is flagged as a small sample.
+  # Below this many weekly votes a rate is flagged as a small sample (Q1, Q3).
   min_votes_per_week: 50
+  # Q2: below this many votes over the 8 weeks, a workspace's quality signal is flagged as weak.
+  min_votes_per_workspace: 20
   # Q2: a workspace needs at least this many answers in the previous 4 weeks to get a risk score.
   min_answers_for_risk: 10
-
-seeds:
-  lexroom_analytics:
-    +schema: raw
-    raw_events_ama:
-      +column_types:
-        event_id: varchar
-        user_id: varchar
-        workspace_id: varchar
-        module_tag: varchar
-        response_latency_ms: bigint
-        response_tokens: bigint
-        retrieved_chunks: bigint
-        is_cached: boolean
-        created_at: timestamptz
-    raw_feedback_ama:
-      +column_types:
-        feedback_id: varchar
-        event_id: varchar
-        user_id: varchar
-        thumbs: integer
-        reason_tag: varchar
-        free_text: varchar
-        created_at: timestamptz
-    raw_users:
-      +column_types:
-        user_id: varchar
-        workspace_id: varchar
-        role: varchar
-        created_at: timestamptz
-        is_deleted: boolean
-    raw_workspaces:
-      +column_types:
-        workspace_id: varchar
-        country: varchar
-        plan: varchar
-        firm_size_bucket: varchar
-        signup_date: date
-    raw_engineering_prs:
-      +column_types:
-        pr_id: varchar
-        author_id: varchar
-        team: varchar
-        created_at: timestamptz
-        merged_at: timestamptz
-        lines_added: bigint
-        lines_deleted: bigint
-        review_comments_count: bigint
 
 models:
   lexroom_analytics:

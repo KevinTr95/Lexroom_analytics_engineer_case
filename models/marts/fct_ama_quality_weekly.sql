@@ -33,21 +33,25 @@ components as (
         thumbs_up   / nullif(votes, 0)                      as satisfaction_rate,
         answers_with_sources / nullif(answers, 0)           as grounded_rate
     from weekly
+),
+
+final as (
+    select
+        week_start,
+        satisfaction_rate * grounded_rate                       as north_star_quality,
+        satisfaction_rate,
+        grounded_rate,
+        response_rate,
+        votes < {{ var('min_votes_per_week') }}                 as is_low_sample,
+        answers,
+        votes,
+        thumbs_up,
+        thumbs_down,
+        answers_with_sources,
+        median_latency_ms,
+        active_workspaces,
+        active_users
+    from components
 )
 
-select
-    week_start,
-    satisfaction_rate * grounded_rate                       as north_star_quality,
-    satisfaction_rate,
-    grounded_rate,
-    response_rate,
-    votes < {{ var('min_votes_per_week') }}                 as is_low_sample,
-    answers,
-    votes,
-    thumbs_up,
-    thumbs_down,
-    answers_with_sources,
-    median_latency_ms,
-    active_workspaces,
-    active_users
-from components
+select * from final

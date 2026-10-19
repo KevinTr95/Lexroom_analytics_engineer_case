@@ -3,9 +3,11 @@
 A small dbt project (dbt-core + DuckDB) that turns the AMA case data into marts answering
 three business questions, plus the optional engineering bonus.
 
-- **10 models**: 5 staging, 1 intermediate, 4 marts
-- **54 tests**: 46 generic (grain, relationships, accepted values) and 8 singular tests on business rules
-- **docs blocks** written for a non-technical reader, **exposures** linking each mart to its question
+- **5 sources** (the raw CSVs, read in place) and **10 models**: 5 staging, 1 intermediate, 4 marts
+- **59 tests**: 51 generic (keys, grain, relationships, accepted values) and 8 singular tests on business rules
+- **every source, model and column documented**, with docs blocks written for a non-technical
+  reader, and **exposures** linking each mart to its question
+- **separate dev and prod** targets, so development never overwrites the tables people read
 - **answer queries** in [`/analyses`](analyses)
 
 ---
@@ -36,21 +38,24 @@ trends must be read together: quality and usage are declining at the same time.
 
 ### Q1 — Every module is getting worse; focus on *societario* and *civile*
 
-Voter satisfaction, last 4 weeks vs the 4 before:
+Quality score (the North Star formula, per module), last 4 weeks vs the 4 before:
 
-| Module | Before | After | Change | Votes (last 4w) |
-|---|---|---|---|---|
-| amministrativo | 68.1% | 50.0% | −18 pts | 18 ⚠️ small sample |
-| societario | 74.1% | 59.5% | −15 pts | 74 |
-| tributario | 73.2% | 62.0% | −11 pts | 50 |
-| civile | 76.3% | 66.0% | −10 pts | 203 |
-| lavoro | 72.3% | 64.9% | −7 pts | 74 |
-| penale | 77.6% | 73.2% | −4 pts | 56 |
+| Module | Before | After | Change | Answers falling short (last 4w) | Votes (last 4w) |
+|---|---|---|---|---|---|
+| amministrativo | 67.8% | 50.0% | −18 pts | 38 | 18 ⚠️ small sample |
+| societario | 73.9% | 59.5% | −14 pts | 113 | 74 |
+| tributario | 72.6% | 61.7% | −11 pts | 73 | 50 |
+| civile | 75.8% | 65.8% | −10 pts | 270 | 203 |
+| lavoro | 71.9% | 64.9% | −7 pts | 112 | 74 |
+| penale | 77.0% | 73.2% | −4 pts | 44 | 56 |
+
+"Answers falling short" = answers × (1 − quality): how many answers are estimated not to be
+both sourced and liked.
 
 Where Product should look first:
 - **societario**: the clearest drop on a meaningful volume.
 - **civile**: a smaller drop, but it is by far the biggest module, so it produces the most
-  unsatisfying answers in absolute terms.
+  answers falling short in absolute terms (~270 in 4 weeks).
 - **amministrativo**: the largest drop, but on 18 votes it is not yet evidence — watch it.
 - Thumbs-down reasons point at **content, not speed**: `wrong_answer`, `incomplete` and
   `hallucination` far outnumber `slow`.
@@ -101,22 +106,30 @@ merged on 20 April, just after the window).
 
 ## Setup
 
-Requirements: Python 3.10+ and Git. Commands run from the repository root.
+Requirements: Python 3.10–3.12 and Git. On macOS the system `python3` is 3.9, which is too
+old: use `uv` or a Homebrew `python3.12`. All commands run from the repository root (the
+sources read `data/*.csv` with a path relative to it).
 
 ```bash
-python3 -m venv .venv                 # or: uv venv .venv --python 3.12
+uv venv .venv --python 3.12           # or: python3.12 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt       # dbt-core 1.12, dbt-duckdb 1.11
+pip install -r requirements.txt       # dbt-core 1.12, dbt-duckdb 1.11 (with uv: uv pip install ...)
 dbt deps                              # installs dbt_utils (pinned, from GitHub)
-dbt build                             # loads the CSV seeds, builds models, runs tests
+dbt build                             # dev target: builds models, runs tests
 dbt docs generate && dbt docs serve   # documentation and lineage in the browser
 ```
 
 `profiles.yml` is in the repository root (dbt looks there first) and writes a local DuckDB
-file, `lexroom.duckdb`. No credentials are needed.
+file, `lexroom.duckdb`. No credentials are needed. Two targets:
 
-To run an answer query: `dbt compile`, then execute the compiled SQL in
-`target/compiled/lexroom_analytics/analyses/`, e.g. with the DuckDB CLI or any SQL client.
+| Target | Command | Schemas |
+|---|---|---|
+| `dev` (default) | `dbt build` | `dev_staging`, `dev_intermediate`, `dev_marts` |
+| `prod` | `dbt build --target prod` | `staging`, `intermediate`, `marts` |
+
+To run an answer query: `dbt show --select q3_north_star_trend` (add `--limit 50` for more
+than 5 rows), or execute the compiled SQL from `target/compiled/lexroom_analytics/analyses/`
+in any SQL client.
 
 Expected result of `dbt build`: all tests pass, with **4 warnings** — they are the known
 data issues listed below, tested as `warn` on purpose.
@@ -126,14 +139,19 @@ data issues listed below, tested as `warn` on purpose.
 ## Project structure
 
 ```
-seeds/            raw CSVs, loaded as-is into the `raw` schema
+data/             raw CSVs, as delivered (declared as dbt sources)
 models/
-  staging/        one model per source: dedup, standardise, type, flag  (views)
+  _shared_docs.md column descriptions used by several models
+  staging/        sources + one model per source: type, dedup, standardise, flag  (views)
   intermediate/   int_ama_events_enriched: one event + its vote + its workspace  (view)
-  marts/          the four tables below  (tables)
+  marts/          the four tables below  (tables), their docs and the exposures
 analyses/         answer queries for Q1, Q2, Q3 and the bonus
+macros/           environment-aware schema names (dev / prod)
 tests/            singular tests on business rules
 ```
+
+Every model follows the dbt Labs layout: import CTEs at the top, one CTE per logical step,
+and a closing `select * from final`.
 
 | Mart | Grain (one row per…) | Answers |
 |---|---|---|
@@ -149,10 +167,17 @@ joined to its vote and customer, so every mart computes quality in the same way.
 
 ## Design decisions and trade-offs
 
-**Seeds instead of sources.** The CSVs are dbt seeds so that `dbt build` reproduces everything
-from a clean clone. In production these tables would be **sources** in BigQuery, fed by
-Pub/Sub, with `freshness` checks. Column types are declared explicitly so loading does not
-depend on type inference.
+**Sources, not seeds.** dbt recommends seeds for small, static lookup data, not for raw
+data. The CSVs are therefore declared as **sources** and read in place by dbt-duckdb
+(`read_csv` with `external_location`), so staging uses `source()` exactly as it would on the
+BigQuery tables fed by Pub/Sub. Every column is read as text and **typed in staging**, the
+first layer that owns the data, so loading never depends on type inference. In production
+the sources would add a `freshness` check (e.g. warn after 6 hours without new events).
+
+**Separate dev and prod.** `generate_schema_name` prefixes schemas with the target schema
+on every target except `prod` (`dev_marts` vs `marts`): a development run can never
+overwrite the tables that CS or Product read. On BigQuery the same macro maps to datasets,
+and each developer would get their own prefix.
 
 **Intermediate as a view, not ephemeral.** An ephemeral model cannot be tested. The one join
 that could silently multiply rows (event → feedback) lives here, so its grain is protected
@@ -212,8 +237,9 @@ proportion is about √(p(1−p)/n), roughly ±18 pts at n = 5 and ±3 pts at n 
   `(thumbs_down + k × global_rate) / (votes + k)`, with `k = 10`, close to the median number
   of votes per workspace. A workspace with 2 votes is pulled towards the average; one with
   200 votes keeps essentially its own rate. Without it, a single thumbs-down could make a
-  tiny workspace look like the worst account. Small workspaces get exactly the same analysis
-  as the others; they are flagged, not excluded.
+  tiny workspace look like the worst account. Workspaces with fewer than 20 votes over the
+  8 weeks are flagged `is_low_sample`; below 10 answers in the earlier 4 weeks they get no
+  score at all (see the next point), but they stay in the table with the reason.
 
 **Q2 risk score: rule-based, each workspace against itself.** Last 4 complete weeks vs the 4 before,
 only for workspaces with **at least 10 answers in the earlier 4 weeks** (`min_answers_for_risk`):
@@ -240,15 +266,18 @@ listed at the end of the Q2 query.
 
 The thresholds are **absolute**. Because the whole platform lost 66% of its usage, most
 workspaces trigger the usage signal. I considered a relative signal (usage drop worse than
-the platform's) which would flag 28 of the 47 scored workspaces instead of 45, but chose to keep the absolute one: the
-job of this mart is to surface the problem faithfully, and the prioritisation belongs to CS.
+the platform's), which would flag 28 of the 47 scored workspaces instead of 45, but kept the
+absolute one: the job of this mart is to surface the problem faithfully, and the
+prioritisation belongs to CS.
 The relative view is still provided as an informational column, `usage_change_vs_platform_pts`.
 
 **Privacy.** `free_text` is dropped in staging (only a `has_free_text` flag is kept). In this
 dataset it contains only 10 generic sentences, but in production it is free text written by
 lawyers and could contain client names or case details. IDs are pseudonymous; 19 workspaces
-have a single user, which would matter if names were ever joined in. The 26 deleted users
-have no events, consistent with deletion-on-request.
+have a single user account (21 counting only accounts that are not deleted), which would
+matter if names were ever joined in. The 26 deleted users have no events, consistent with
+deletion-on-request; 2 of them still have a feedback, both pointing to non-existent events
+(issue #7).
 
 ---
 
@@ -267,7 +296,7 @@ have no events, consistent with deletion-on-request.
 | 9 | Events before the user's `created_at` | 817 events, 71 users | All `users.created_at` values are at midnight, i.e. truncated: the event timestamp is trusted, the mismatch is flagged |
 | 10 | Events before the workspace `signup_date` | 3 workspaces | Same as #9 |
 | 11 | Missing `country` | 3 workspaces | `'unknown'` |
-| 12 | Thumbs-down without `reason_tag` | 175 | Kept NULL = "no reason given". Note: `reason_tag` and `free_text` often disagree (e.g. "too slow" is tagged `slow` only once in 12), so reasons are indicative |
+| 12 | Thumbs-down without `reason_tag` | 173 (175 before deduplication) | Kept NULL = "no reason given". Note: `reason_tag` and `free_text` often disagree (e.g. "too slow" is tagged `slow` only once in 12), so reasons are indicative |
 | 13 | Unmerged PRs | 65 of 520 | `merged_at` NULL; lead time on merged PRs only, reported next to open PRs and their age to offset the optimistic bias |
 | 14 | PR merged after the end of the data window | 1 (20 April) | Counted as open at the end of the last week, not as merged: the mart describes the state at the window end |
 
@@ -277,6 +306,7 @@ have no events, consistent with deletion-on-request.
 
 | Test | Protects against |
 |---|---|
+| `not_null` on every source key | a broken export or event without an identifier |
 | `unique` + `not_null` on every staging key | duplicates re-entering from the event stream |
 | `unique` on `int_ama_events_enriched.event_id` | an event getting two feedbacks and multiplying every metric (fan-out) |
 | `unique_combination_of_columns` on module × week, team × week | grain violations in the weekly marts |
@@ -316,8 +346,8 @@ The logic is portable; the main changes would be:
 - `median()` / `quantile_cont()` → `APPROX_QUANTILES()` or `PERCENTILE_CONT()`
 - `count(*) filter (where …)` → `COUNTIF(…)`
 - `x at time zone 'UTC'` → `TIMESTAMP` columns are already UTC in BigQuery
-- seeds → sources on the Pub/Sub tables, with `freshness`, and incremental models on the
-  event tables to limit scanned bytes (cost)
+- sources: `external_location` → the Pub/Sub tables, with `freshness`; incremental models on
+  the event tables to limit scanned bytes (cost)
 
 ---
 
@@ -334,24 +364,38 @@ The logic is portable; the main changes would be:
 - **Validate the risk score** against actual churn or downgrades once the history exists,
   and tune thresholds and weights with CS.
 - **Confidence intervals** (e.g. Wilson) instead of a binary small-sample flag.
-- **Production hardening**: sources with freshness, incremental event models, CI running
+- **Production hardening**: source freshness, incremental event models, CI running
   `dbt build` on pull requests, and a semantic layer so the North Star is defined once for
   every tool.
+- **dbt unit tests** (dbt ≥ 1.8) on the deterministic logic: the risk-score rules and the
+  latency classification, tested on hand-made inputs rather than on today's data only.
+- **dbt Labs folder layout**: `staging/lexroom/` with `_lexroom__sources.yml` and
+  `_lexroom__models.yml`, and marts grouped by business area (`product/`,
+  `customer_success/`, `engineering/`). Not worth the churn at 10 models, useful past ~20.
+- **Model contracts** on the marts (`contract: enforced`), once a BI tool or another team
+  depends on their columns.
 - **Bonus**: real DORA metrics need deploy and incident data; merge lead time is a proxy.
 
 ---
 
 ## How AI was used
 
-- **Claude Code (Anthropic)** reviewed the finished project against the case brief and dbt Labs
-  conventions: it ran `dbt build`, queried the DuckDB output to check every figure in this
-  README, and flagged weak points. The changes that came out of that review:
-  - 900,000 ms latencies reclassified from "timeout" to a placeholder value, and the
-    "delivered share" removed from the North Star (data issue #5);
-  - Q2: minimum volume before a workspace gets a risk score, and explicit statuses for
-    unscored workspaces instead of a score of 0;
-  - `_pts` columns expressed in real percentage points;
-  - engineering mart: week spine driven by a variable and a reconciliation test, after a PR
-    merged just outside the window was found to drop out silently.
-- _Author: add here how AI was used while building the project (tools, which parts, what was
-  checked by hand)._
+I used Claude (Anthropic) in two ways.
+
+**First, to explore the data.** At the start I used it to profile the five files quickly:
+row counts, duplicates, null and out-of-range values, orphan keys, timestamp ranges and
+distributions. Most of the *Known data issues* above surfaced in this phase; I then checked
+each one myself before deciding how to handle it.
+
+**Then, step by step, as support for consistency and reliability.** While building each
+layer I used it to review the SQL and to verify the results against the data, so that every
+number in this README can be traced back to a query:
+- checking that each model keeps its grain (no fan-out, marts reconciling with the events);
+- checking that the same definition of quality is used everywhere (North Star, Q1, Q2);
+- reviewing the project against the brief and the dbt Labs conventions, which led to some
+  of the design changes above: the 900,000 ms values treated as placeholders rather than
+  timeouts, a minimum volume before a workspace gets a risk score, sources instead of
+  seeds, separate dev and prod targets and documentation on every column.
+
+The choices of metrics, thresholds and trade-offs are mine; the AI made it faster to test
+them against the data and to keep the project consistent.

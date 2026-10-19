@@ -20,41 +20,45 @@ users as (
 
 workspaces as (
     select * from {{ ref('stg_lexroom__workspaces') }}
+),
+
+final as (
+    select
+        events.event_id,
+        events.user_id,
+        events.workspace_id,
+        events.module_tag,
+        events.event_at,
+        cast(date_trunc('week', events.event_at) as date)      as event_week,   -- ISO week, starting Monday
+
+        -- Answer
+        events.response_latency_ms,                              -- NULL when the measurement is invalid
+        events.latency_status,
+        events.has_invalid_latency,
+        events.response_tokens,
+        events.retrieved_chunks,
+        events.retrieved_chunks > 0                              as has_sources,
+        events.is_cached,
+
+        -- Feedback (NULL = no vote, or an invalid vote)
+        valid_feedback.feedback_id is not null                   as has_vote,
+        valid_feedback.thumbs,
+        valid_feedback.is_thumbs_down,
+        valid_feedback.reason_tag,
+
+        -- Workspace (NULL when the workspace is missing from the workspaces table)
+        workspaces.workspace_id is null                          as is_unknown_workspace,
+        workspaces.country,
+        workspaces.plan,
+        workspaces.firm_size_bucket,
+
+        -- Time consistency: users.created_at is truncated to midnight,
+        -- so we trust the event and only flag the inconsistency
+        events.event_at < users.created_at                       as is_before_user_creation
+    from events
+    left join valid_feedback on valid_feedback.event_id = events.event_id
+    left join users          on users.user_id           = events.user_id
+    left join workspaces     on workspaces.workspace_id = events.workspace_id
 )
 
-select
-    events.event_id,
-    events.user_id,
-    events.workspace_id,
-    events.module_tag,
-    events.event_at,
-    cast(date_trunc('week', events.event_at) as date)      as event_week,   -- ISO week, starting Monday
-
-    -- Answer
-    events.response_latency_ms,                              -- NULL when the measurement is invalid
-    events.latency_status,
-    events.has_invalid_latency,
-    events.response_tokens,
-    events.retrieved_chunks,
-    events.retrieved_chunks > 0                              as has_sources,
-    events.is_cached,
-
-    -- Feedback (NULL = no vote, or an invalid vote)
-    valid_feedback.feedback_id is not null                   as has_vote,
-    valid_feedback.thumbs,
-    valid_feedback.is_thumbs_down,
-    valid_feedback.reason_tag,
-
-    -- Workspace (NULL when the workspace is missing from the workspaces table)
-    workspaces.workspace_id is null                          as is_unknown_workspace,
-    workspaces.country,
-    workspaces.plan,
-    workspaces.firm_size_bucket,
-
-    -- Time consistency: users.created_at is truncated to midnight,
-    -- so we trust the event and only flag the inconsistency
-    events.event_at < users.created_at                       as is_before_user_creation
-from events
-left join valid_feedback on valid_feedback.event_id = events.event_id
-left join users          on users.user_id           = events.user_id
-left join workspaces     on workspaces.workspace_id = events.workspace_id
+select * from final

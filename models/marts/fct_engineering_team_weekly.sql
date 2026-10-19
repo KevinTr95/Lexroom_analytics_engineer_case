@@ -51,28 +51,32 @@ merged as (
 open_at_week_end as (
     -- PRs opened before the end of the week and not yet merged at that point
     select
-        tw.team,
-        tw.week_start,
-        count(p.pr_id)                                              as prs_open_at_week_end,
-        median(date_diff('minute', p.created_at, tw.week_end) / 60.0)
+        team_weeks.team,
+        team_weeks.week_start,
+        count(prs.pr_id)                                            as prs_open_at_week_end,
+        median(date_diff('minute', prs.created_at, team_weeks.week_end) / 60.0)
                                                                     as median_open_pr_age_hours
-    from team_weeks as tw
-    left join prs as p
-        on  p.team = tw.team
-        and p.created_at < tw.week_end
-        and (p.merged_at is null or p.merged_at >= tw.week_end)
+    from team_weeks
+    left join prs
+        on  prs.team = team_weeks.team
+        and prs.created_at < team_weeks.week_end
+        and (prs.merged_at is null or prs.merged_at >= team_weeks.week_end)
     group by 1, 2
+),
+
+final as (
+    select
+        team_weeks.team,
+        team_weeks.week_start,
+        coalesce(merged.prs_merged, 0)                              as prs_merged,
+        merged.median_merge_lead_time_hours,
+        merged.p90_merge_lead_time_hours,
+        merged.median_pr_size_lines,
+        open_at_week_end.prs_open_at_week_end,
+        open_at_week_end.median_open_pr_age_hours
+    from team_weeks
+    left join merged           using (team, week_start)
+    left join open_at_week_end using (team, week_start)
 )
 
-select
-    tw.team,
-    tw.week_start,
-    coalesce(m.prs_merged, 0)                                       as prs_merged,
-    m.median_merge_lead_time_hours,
-    m.p90_merge_lead_time_hours,
-    m.median_pr_size_lines,
-    o.prs_open_at_week_end,
-    o.median_open_pr_age_hours
-from team_weeks as tw
-left join merged           as m using (team, week_start)
-left join open_at_week_end as o using (team, week_start)
+select * from final
