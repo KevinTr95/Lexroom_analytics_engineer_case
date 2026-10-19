@@ -179,9 +179,12 @@ on every target except `prod` (`dev_marts` vs `marts`): a development run can ne
 overwrite the tables that CS or Product read. On BigQuery the same macro maps to datasets,
 and each developer would get their own prefix.
 
-**Intermediate as a view, not ephemeral.** An ephemeral model cannot be tested. The one join
-that could silently multiply rows (event → feedback) lives here, so its grain is protected
-by a `unique` test.
+**Intermediate as a view, not ephemeral.** An ephemeral model would also be testable (dbt
+injects it as a CTE into the test query), but it exists only inside the compiled SQL of its
+consumers: as a view it can be queried directly when a number needs explaining, and its
+three joins are defined once instead of being pasted into the 3 marts and 4 tests that use
+it. The one join that could silently multiply rows (event → feedback) lives here, and its
+grain is protected by a `unique` test.
 
 **Windows anchored to the data, Monday weeks, UTC.** "Last 8 weeks" is computed from
 `analysis_end_week` (a project variable), not `current_date`: on this dataset, today's
@@ -235,7 +238,9 @@ proportion is about √(p(1−p)/n), roughly ±18 pts at n = 5 and ±3 pts at n 
 - Q1/Q3 rows with fewer than 50 votes are flagged `is_low_sample` rather than hidden.
 - In Q2 the thumbs-down share is **smoothed** (empirical-Bayes shrinkage):
   `(thumbs_down + k × global_rate) / (votes + k)`, with `k = 10`, close to the median number
-  of votes per workspace. A workspace with 2 votes is pulled towards the average; one with
+  of votes of a scored workspace in the earlier 4-week window (12): a typical account weighs
+  half its own rate and half the average. Across all workspaces the median is much lower
+  (3.5), which is exactly why the smoothing is needed. A workspace with 2 votes is pulled towards the average; one with
   200 votes keeps essentially its own rate. Without it, a single thumbs-down could make a
   tiny workspace look like the worst account. Workspaces with fewer than 20 votes over the
   8 weeks are flagged `is_low_sample`; below 10 answers in the earlier 4 weeks they get no
@@ -380,22 +385,27 @@ The logic is portable; the main changes would be:
 
 ## How AI was used
 
-I used Claude (Anthropic) in two ways.
+I used Claude (Anthropic) throughout the case, in three phases.
 
-**First, to explore the data.** At the start I used it to profile the five files quickly:
+**1. Exploring the data.** At the start I used it to profile the five files quickly:
 row counts, duplicates, null and out-of-range values, orphan keys, timestamp ranges and
 distributions. Most of the *Known data issues* above surfaced in this phase; I then checked
 each one myself before deciding how to handle it.
 
-**Then, step by step, as support for consistency and reliability.** While building each
-layer I used it to review the SQL and to verify the results against the data, so that every
-number in this README can be traced back to a query:
+**2. Deciding the structure, then writing the code.** We worked out together how to
+structure the project: the three layers, the grain of each mart, the North Star formula and
+the risk-score rules. With those decisions taken, I wrote the first version of the code
+myself.
+
+**3. Reviewing it for standards, consistency and documentation.** I then had the AI review
+the whole project, step by step, to bring it in line with the dbt Labs conventions and to
+document it, and to verify every result against the data, so that each number in this README
+can be traced back to a query:
 - checking that each model keeps its grain (no fan-out, marts reconciling with the events);
 - checking that the same definition of quality is used everywhere (North Star, Q1, Q2);
-- reviewing the project against the brief and the dbt Labs conventions, which led to some
-  of the design changes above: the 900,000 ms values treated as placeholders rather than
-  timeouts, a minimum volume before a workspace gets a risk score, sources instead of
-  seeds, separate dev and prod targets and documentation on every column.
-
-The choices of metrics, thresholds and trade-offs are mine; the AI made it faster to test
-them against the data and to keep the project consistent.
+- aligning the project with the brief and the dbt Labs conventions: sources instead of seeds,
+  separate dev and prod targets, the same CTE layout in every model, and a description on
+  every source, model and column;
+- challenging some of the design choices against the data, which led to the 900,000 ms
+  values being treated as placeholders rather than timeouts and to a minimum volume before
+  a workspace gets a risk score.

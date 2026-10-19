@@ -12,19 +12,27 @@ clean-targets:
   - "dbt_packages"
 
 vars:
+  # Dates: anchors to the data, no neutral value. If new data arrives, move them forward.
   # First and last week (Monday) in the data. "Last N weeks" windows are anchored here,
   # not to current_date: the events end on Sunday 2026-04-19.
   data_start_week: '2026-02-02'
   analysis_end_week: '2026-04-13'
   # The PR data starts one week earlier than the AMA events.
   prs_start_week: '2026-01-26'
+
+  # Thresholds and parameters. "Neutral" = the value that switches the rule off.
   # Smoothing strength: number of "virtual" votes at the global rate (see README).
+  # Neutral: 0 (raw thumbs-down rates, no smoothing).
   smoothing_k: 10
   # Below this many weekly votes a rate is flagged as a small sample (Q1, Q3).
+  # Neutral: 0 (is_low_sample always false). Only a flag: no number changes.
   min_votes_per_week: 50
   # Q2: below this many votes over the 8 weeks, a workspace's quality signal is flagged as weak.
+  # Neutral: 0 (is_low_sample always false). Only a flag: no number changes.
   min_votes_per_workspace: 20
   # Q2: a workspace needs at least this many answers in the previous 4 weeks to get a risk score.
+  # Neutral: 1, not 0 (every workspace with any earlier activity is scored). With 0, workspaces
+  # with no earlier activity would get a score of 0 and assert_risk_score_in_range fails.
   min_answers_for_risk: 10
 
 models:
@@ -33,7 +41,7 @@ models:
       +materialized: view
       +schema: staging
     intermediate:
-      +materialized: view   # a view, not ephemeral, so its grain can be tested
+      +materialized: view   # a view, not ephemeral: it can be queried directly when debugging
       +schema: intermediate
     marts:
       +materialized: table

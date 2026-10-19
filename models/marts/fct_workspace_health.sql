@@ -100,11 +100,12 @@ measures as (
         coalesce(users_recent, 0)   / nullif(users_prev, 0) - 1                 as active_users_change,
         latency_recent / nullif(latency_prev, 0) - 1                            as latency_change,
 
-        -- Smoothed thumbs-down rate: (thumbs down + k * global rate) / (votes + k)
+        -- Smoothed thumbs-down rate: (thumbs down + k * global rate) / (votes + k).
+        -- NULL when the denominator is zero (no votes and k = 0, i.e. smoothing switched off)
         (coalesce(thumbs_down_prev, 0)   + {{ var('smoothing_k') }} * global_rate.thumbs_down_rate)
-            / (coalesce(votes_prev, 0)   + {{ var('smoothing_k') }})            as thumbs_down_rate_prev,
+            / nullif(coalesce(votes_prev, 0)   + {{ var('smoothing_k') }}, 0)   as thumbs_down_rate_prev,
         (coalesce(thumbs_down_recent, 0) + {{ var('smoothing_k') }} * global_rate.thumbs_down_rate)
-            / (coalesce(votes_recent, 0) + {{ var('smoothing_k') }})            as thumbs_down_rate_recent,
+            / nullif(coalesce(votes_recent, 0) + {{ var('smoothing_k') }}, 0)   as thumbs_down_rate_recent,
 
         no_source_recent / nullif(answers_recent, 0)                            as no_source_share_recent,
 
