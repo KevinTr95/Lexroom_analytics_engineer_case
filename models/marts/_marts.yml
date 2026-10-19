@@ -1,0 +1,85 @@
+models:
+  - name: fct_ama_module_weekly
+    description: '{{ doc("fct_ama_module_weekly") }}'
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [module_tag, week_start]
+    columns:
+      - name: module_tag
+        description: "Legal module."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['civile', 'penale', 'tributario', 'lavoro', 'amministrativo', 'societario']
+      - name: week_start
+        description: "Monday of the week."
+        data_tests: [not_null]
+      - name: quality_score
+        description: '{{ doc("quality_score") }}'
+      - name: satisfaction_rate
+        description: "Thumbs up / valid votes. Only reflects people who vote."
+      - name: response_rate
+        description: "Valid votes / answers. If it shifts a lot, satisfaction becomes less comparable over time."
+      - name: is_low_sample
+        description: "True when the week has fewer than 50 votes: the rate is unstable and should be read with care."
+
+  - name: fct_ama_quality_weekly
+    description: '{{ doc("fct_ama_quality_weekly") }}'
+    columns:
+      - name: week_start
+        description: "Monday of the week."
+        data_tests: [unique, not_null]
+      - name: north_star_quality
+        description: '{{ doc("quality_score") }}'
+      - name: active_workspaces
+        description: "Workspaces that asked AMA at least one question in the week. A guardrail: the North Star measures quality, not usage."
+
+  - name: fct_workspace_health
+    description: '{{ doc("fct_workspace_health") }}'
+    columns:
+      - name: workspace_id
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_lexroom__workspaces')
+                field: workspace_id
+      - name: risk_score
+        description: '{{ doc("risk_score") }}'
+      - name: risk_band
+        description: '{{ doc("risk_band") }}'
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['high', 'medium', 'low', 'low_volume', 'new', 'returning', 'dormant', 'never_active']
+      - name: first_active_week
+        description: "Week of the workspace's first AMA answer in the data. NULL = never used AMA."
+      - name: risk_signals
+        description: "The signals that fired, in plain words: the explanation of the score."
+      - name: thumbs_down_change_pts
+        description: "Change in the smoothed thumbs-down share, in percentage points (12 = from 20% to 32%)."
+      - name: usage_change_vs_platform_pts
+        description: "Workspace usage change minus the platform's, in percentage points. Context only, not part of the score: negative = worse than average."
+      - name: is_low_sample
+        description: "True when the workspace has fewer than 20 votes over the 8 weeks: the quality signal is unreliable."
+
+  - name: fct_engineering_team_weekly
+    description: '{{ doc("fct_engineering_team_weekly") }}'
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [team, week_start]
+    columns:
+      - name: team
+        data_tests: [not_null]
+      - name: week_start
+        description: "Monday of the week."
+        data_tests: [not_null]
+      - name: median_merge_lead_time_hours
+        description: "Median hours between opening and merging, for PRs merged in the week."
+      - name: prs_open_at_week_end
+        description: "PRs open and not yet merged at the end of the week."

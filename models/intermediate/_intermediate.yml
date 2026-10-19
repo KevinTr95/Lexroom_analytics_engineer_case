@@ -1,0 +1,12 @@
+models:
+  - name: int_ama_events_enriched
+    description: '{{ doc("int_ama_events_enriched") }}'
+    columns:
+      - name: event_id
+        description: "Event identifier. It must stay unique: if an event got several feedbacks, the join would multiply them (fan-out) and skew every downstream metric."
+        data_tests: [unique, not_null]
+      - name: event_week
+        description: "Monday of the event's week (ISO week, UTC)."
+        data_tests: [not_null]
+      - name: has_vote
+        description: "True when the answer received a valid vote (+1 or -1)."

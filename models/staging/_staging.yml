@@ -1,0 +1,117 @@
+models:
+  - name: stg_lexroom__events_ama
+    description: "One row per AMA event (a question to the assistant and its answer). Duplicates removed, module_tag standardised, invalid latencies set to NULL."
+    columns:
+      - name: event_id
+        data_tests: [unique, not_null]
+      - name: user_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_lexroom__users')
+                field: user_id
+      - name: workspace_id
+        data_tests:
+          - not_null
+          - relationships:            # 8 events on non-existent workspaces (ws_9000, ws_9001): known
+              arguments:
+                to: ref('stg_lexroom__workspaces')
+                field: workspace_id
+              config:
+                severity: warn
+      - name: module_tag
+        data_tests:
+          - not_null
+          - accepted_values:          # a new value would create a phantom module in Q1: blocking
+              arguments:
+                values: ['civile', 'penale', 'tributario', 'lavoro', 'amministrativo', 'societario']
+      - name: latency_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['valid', 'negative', 'sentinel', 'implausible_cache']
+      - name: response_latency_ms
+        description: "Valid latency in ms; NULL when the measurement is invalid (see latency_status)."
+
+  - name: stg_lexroom__feedback_ama
+    description: "One row per feedback (thumbs up/down) on an AMA answer. Duplicates removed; free_text dropped for privacy."
+    columns:
+      - name: feedback_id
+        data_tests: [unique, not_null]
+      - name: event_id
+        data_tests:
+          - not_null
+          - relationships:            # 50 feedbacks point to non-existent events (_orphan suffix): known
+              arguments:
+                to: ref('stg_lexroom__events_ama')
+                field: event_id
+              config:
+                severity: warn
+      - name: user_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_lexroom__users')
+                field: user_id
+      - name: thumbs
+        data_tests:
+          - accepted_values:          # 16 off-schema values (-2, 0, 2): known and excluded from metrics
+              arguments:
+                values: [1, -1]
+                quote: false
+              config:
+                severity: warn
+      - name: reason_tag
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['wrong_answer', 'incomplete', 'hallucination', 'slow', 'other']
+
+  - name: stg_lexroom__users
+    description: "One row per user."
+    columns:
+      - name: user_id
+        data_tests: [unique, not_null]
+      - name: workspace_id
+        data_tests:
+          - not_null
+          - relationships:            # 3 users (u_orphan_*) on non-existent workspaces: known
+              arguments:
+                to: ref('stg_lexroom__workspaces')
+                field: workspace_id
+              config:
+                severity: warn
+      - name: role
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['partner', 'associate', 'paralegal', 'in_house_counsel']
+
+  - name: stg_lexroom__workspaces
+    description: "One row per workspace (a law firm or an in-house legal team)."
+    columns:
+      - name: workspace_id
+        data_tests: [unique, not_null]
+      - name: country
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['IT', 'DE', 'ES', 'unknown']
+      - name: plan
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['free', 'pro', 'enterprise']
+      - name: firm_size_bucket
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['1-5', '6-20', '21-100', '100+']
+
+  - name: stg_lexroom__engineering_prs
+    description: "One row per pull request from the engineering team (bonus)."
+    columns:
+      - name: pr_id
+        data_tests: [unique, not_null]

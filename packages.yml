@@ -1,0 +1,4 @@
+packages:
+  # Pinned version, pulled from GitHub (same as dbt-labs/dbt_utils 1.3.0 on the dbt hub).
+  - git: "https://github.com/dbt-labs/dbt-utils.git"
+    revision: 1.3.0

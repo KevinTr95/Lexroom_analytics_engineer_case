@@ -1,0 +1,48 @@
+exposures:
+  - name: q1_ama_quality_by_module
+    label: "Q1 - AMA quality by module"
+    type: analysis
+    maturity: medium
+    description: >
+      For each legal module, the weekly quality trend over the last 8 weeks and where the
+      Product team should focus. Queries: analyses/q1_*.sql
+    depends_on:
+      - ref('fct_ama_module_weekly')
+    owner:
+      name: Product
+
+  - name: q2_workspace_health_risk
+    label: "Q2 - Customer experience risk"
+    type: analysis
+    maturity: medium
+    description: >
+      Which workspaces show signs of a deteriorating experience, with a risk score explained
+      by the signals that fired. Query: analyses/q2_workspaces_at_risk.sql
+    depends_on:
+      - ref('fct_workspace_health')
+    owner:
+      name: Customer Success
+
+  - name: q3_ama_north_star
+    label: "Q3 - AMA quality North Star"
+    type: analysis
+    maturity: medium
+    description: >
+      One number to track AMA quality over time: the estimated share of good answers.
+      Query: analyses/q3_north_star_trend.sql
+    depends_on:
+      - ref('fct_ama_quality_weekly')
+    owner:
+      name: Leadership
+
+  - name: bonus_engineering_lead_time
+    label: "Bonus - Merge lead time per team"
+    type: analysis
+    maturity: low
+    description: >
+      A DORA-style engineering health metric: time from opening to merging pull requests,
+      with the PRs left open. Query: analyses/bonus_engineering_lead_time.sql
+    depends_on:
+      - ref('fct_engineering_team_weekly')
+    owner:
+      name: Engineering
