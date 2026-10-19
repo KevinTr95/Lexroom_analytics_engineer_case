@@ -17,28 +17,9 @@ three business questions, plus the optional engineering bonus.
 All windows are anchored to the **last complete week in the data** (week of 13 April 2026),
 not to today's date. "Last 8 weeks" = weeks starting 23 Feb → 13 Apr 2026.
 
-### Q3 — North Star: AMA quality is falling, and so is usage
-
-| Week | North Star | Votes | Active workspaces |
-|---|---|---|---|
-| 23 Feb | 70.8% | 448 | 65 |
-| 02 Mar | 76.3% | 394 | 64 |
-| 09 Mar | 76.4% | 317 | 58 |
-| 16 Mar | 73.9% | 278 | 54 |
-| 23 Mar | 66.1% | 229 | 58 |
-| 30 Mar | 63.4% | 142 | 46 |
-| 06 Apr | 65.3% | 84 | 42 |
-| 13 Apr | 50.0% ⚠️ | 20 | 33 |
-
-The estimated share of good answers drops from ~76% in early March to ~65% in April.
-The last week (50%) rests on 20 votes (±22 pts) and is flagged as a small sample.
-**At the same time usage collapses**: answers per week go from 1,875 (mid-February peak) to 102,
-active workspaces from 67 to 33. The North Star measures quality, not usage, so the two
-trends must be read together: quality and usage are declining at the same time.
-
 ### Q1 — Every module is getting worse; focus on *societario* and *civile*
 
-Quality score (the North Star formula, per module), last 4 weeks vs the 4 before:
+Quality score (the North Star formula of Q3, per module), last 4 weeks vs the 4 before:
 
 | Module | Before | After | Change | Answers falling short (last 4w) | Votes (last 4w) |
 |---|---|---|---|---|---|
@@ -94,6 +75,25 @@ Examples among workspaces with enough votes:
 | ws_0051 | enterprise, 1–5 | 60 | usage −67%, thumbs down +24 pts |
 
 24 of the 45 high/medium workspaces have fewer than 20 votes in 8 weeks: their quality signal is weak.
+
+### Q3 — North Star: AMA quality is falling, and so is usage
+
+| Week | North Star | Votes | Active workspaces |
+|---|---|---|---|
+| 23 Feb | 70.8% | 448 | 65 |
+| 02 Mar | 76.3% | 394 | 64 |
+| 09 Mar | 76.4% | 317 | 58 |
+| 16 Mar | 73.9% | 278 | 54 |
+| 23 Mar | 66.1% | 229 | 58 |
+| 30 Mar | 63.4% | 142 | 46 |
+| 06 Apr | 65.3% | 84 | 42 |
+| 13 Apr | 50.0% ⚠️ | 20 | 33 |
+
+The estimated share of good answers drops from ~76% in early March to ~65% in April.
+The last week (50%) rests on 20 votes (±22 pts) and is flagged as a small sample.
+**At the same time usage collapses**: answers per week go from 1,875 (mid-February peak) to 102,
+active workspaces from 67 to 33. The North Star measures quality, not usage, so the two
+trends must be read together: quality and usage are declining at the same time.
 
 ### Bonus — engineering merge lead time
 
